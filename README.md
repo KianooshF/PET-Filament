@@ -16,7 +16,7 @@ just the files I put there. ( If you use the original source, only these files a
 In the optional folder, there are files for inputting strings made from the Botlle
 If you don't want the can to be turned into filament directly, you must first shape it into a strip and put it on the filament machine with this holder.
 I suggest you see the picture below :
-![alt text](images/BodyModel.png)
+![alt text](Images/BodyModel.png)
 and my Device :
 
 #### How Do it?
