@@ -1,0 +1,72 @@
+//
+// !!! WARNING !!! AUTO-GENERATED FILE!
+// PLEASE DO NOT MODIFY IT AND USE "platformio.ini":
+// https://docs.platformio.org/page/projectconf/section_env_build.html#build-flags
+//
+{
+    "configurations": [
+        {
+            "name": "PlatformIO",
+            "includePath": [
+                "C:/Users/Kianoosh/Documents/PlatformIO/Projects/PetController_Nano/include",
+                "C:/Users/Kianoosh/Documents/PlatformIO/Projects/PetController_Nano/src",
+                "C:/Users/Kianoosh/Documents/PlatformIO/Projects/PetController_Nano/.pio/libdeps/nanoatmega328/Adafruit SSD1306",
+                "C:/Users/Kianoosh/Documents/PlatformIO/Projects/PetController_Nano/.pio/libdeps/nanoatmega328/Adafruit GFX Library",
+                "C:/Users/Kianoosh/Documents/PlatformIO/Projects/PetController_Nano/.pio/libdeps/nanoatmega328/Adafruit BusIO",
+                "C:/Users/Kianoosh/.platformio/packages/framework-arduino-avr/libraries/SPI/src",
+                "C:/Users/Kianoosh/.platformio/packages/framework-arduino-avr/libraries/Wire/src",
+                "C:/Users/Kianoosh/Documents/PlatformIO/Projects/PetController_Nano/.pio/libdeps/nanoatmega328/AccelStepper/src",
+                "C:/Users/Kianoosh/Documents/PlatformIO/Projects/PetController_Nano/.pio/libdeps/nanoatmega328/Encoder",
+                "C:/Users/Kianoosh/Documents/PlatformIO/Projects/PetController_Nano/.pio/libdeps/nanoatmega328/Encoder/utility",
+                "C:/Users/Kianoosh/Documents/PlatformIO/Projects/PetController_Nano/.pio/libdeps/nanoatmega328/thermistor",
+                "C:/Users/Kianoosh/Documents/PlatformIO/Projects/PetController_Nano/.pio/libdeps/nanoatmega328/PID",
+                "C:/Users/Kianoosh/.platformio/packages/framework-arduino-avr/cores/arduino",
+                "C:/Users/Kianoosh/.platformio/packages/framework-arduino-avr/variants/eightanaloginputs",
+                "C:/Users/Kianoosh/.platformio/packages/framework-arduino-avr/libraries/EEPROM/src",
+                "C:/Users/Kianoosh/.platformio/packages/framework-arduino-avr/libraries/HID/src",
+                "C:/Users/Kianoosh/.platformio/packages/framework-arduino-avr/libraries/SoftwareSerial/src",
+                ""
+            ],
+            "browse": {
+                "limitSymbolsToIncludedHeaders": true,
+                "path": [
+                    "C:/Users/Kianoosh/Documents/PlatformIO/Projects/PetController_Nano/include",
+                    "C:/Users/Kianoosh/Documents/PlatformIO/Projects/PetController_Nano/src",
+                    "C:/Users/Kianoosh/Documents/PlatformIO/Projects/PetController_Nano/.pio/libdeps/nanoatmega328/Adafruit SSD1306",
+                    "C:/Users/Kianoosh/Documents/PlatformIO/Projects/PetController_Nano/.pio/libdeps/nanoatmega328/Adafruit GFX Library",
+                    "C:/Users/Kianoosh/Documents/PlatformIO/Projects/PetController_Nano/.pio/libdeps/nanoatmega328/Adafruit BusIO",
+                    "C:/Users/Kianoosh/.platformio/packages/framework-arduino-avr/libraries/SPI/src",
+                    "C:/Users/Kianoosh/.platformio/packages/framework-arduino-avr/libraries/Wire/src",
+                    "C:/Users/Kianoosh/Documents/PlatformIO/Projects/PetController_Nano/.pio/libdeps/nanoatmega328/AccelStepper/src",
+                    "C:/Users/Kianoosh/Documents/PlatformIO/Projects/PetController_Nano/.pio/libdeps/nanoatmega328/Encoder",
+                    "C:/Users/Kianoosh/Documents/PlatformIO/Projects/PetController_Nano/.pio/libdeps/nanoatmega328/Encoder/utility",
+                    "C:/Users/Kianoosh/Documents/PlatformIO/Projects/PetController_Nano/.pio/libdeps/nanoatmega328/thermistor",
+                    "C:/Users/Kianoosh/Documents/PlatformIO/Projects/PetController_Nano/.pio/libdeps/nanoatmega328/PID",
+                    "C:/Users/Kianoosh/.platformio/packages/framework-arduino-avr/cores/arduino",
+                    "C:/Users/Kianoosh/.platformio/packages/framework-arduino-avr/variants/eightanaloginputs",
+                    "C:/Users/Kianoosh/.platformio/packages/framework-arduino-avr/libraries/EEPROM/src",
+                    "C:/Users/Kianoosh/.platformio/packages/framework-arduino-avr/libraries/HID/src",
+                    "C:/Users/Kianoosh/.platformio/packages/framework-arduino-avr/libraries/SoftwareSerial/src",
+                    ""
+                ]
+            },
+            "defines": [
+                "PLATFORMIO=60116",
+                "ARDUINO_AVR_NANO",
+                "F_CPU=16000000L",
+                "ARDUINO_ARCH_AVR",
+                "ARDUINO=10808",
+                "__AVR_ATmega328P__",
+                ""
+            ],
+            "cStandard": "gnu11",
+            "cppStandard": "gnu++11",
+            "compilerPath": "C:/Users/Kianoosh/.platformio/packages/toolchain-atmelavr/bin/avr-gcc.exe",
+            "compilerArgs": [
+                "-mmcu=atmega328p",
+                ""
+            ]
+        }
+    ],
+    "version": 4
+}
