@@ -1,12 +1,11 @@
 #include <PID_v1.h>
-#include <thermistor.h> //https://github.com/miguel5612/Arduino-ThermistorLibrary
+#include <thermistor.h> // https://github.com/miguel5612/Arduino-ThermistorLibrary
 #include <Wire.h>
 #include <SPI.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
-#include <Arduino.h>
+#include <Ticker.h> // برای تایمر نرم‌افزاری در ESP8266
 #include <Encoder.h>
-#include <Arduino.h>
 
 //-------------------LCD Define-------------------
 
@@ -21,8 +20,14 @@
 
 //-------------------Temp Out/In-------------------
 
-const int pwmPin = 3;
 const int temperaturePin = A0; // Define the remaining IO pins for motor, pushbutton & thermistor
+
+THERMISTOR thermistor(temperaturePin, // Analog pin
+                      50,             // Nominal resistance at 25 ºC
+                      3100,           // thermistor's beta coefficient
+                      50);            // Value of the series resistor
+
+const int pwmPin = D8; // PWM pin on ESP8266
 
 //-------------------Motor Out-------------------
 
@@ -32,17 +37,23 @@ const int temperaturePin = A0; // Define the remaining IO pins for motor, pushbu
 const int stepsPerRevolution = 200;      // تعداد گام‌ها در هر دور
 const unsigned long minFrequency = 80;   // حداقل فرکانس پالس‌ها (۱۰۰ هرتز)
 const unsigned long maxFrequency = 3000; // حداکثر فرکانس پالس‌ها (۱۰ کیلوهرتز)
-const unsigned long maxOCRValue = 65535; // حداکثر مقدار OCR1A
-const unsigned long minOCRValue = 80;    // حداقل مقدار OCR1A (برای فرکانس‌های عملی)
 
-const int motDirPin = PD6;
-const int motStepPin = PD7;
+const int motDirPin = D3;  // DIR pin on ESP8266
+const int motStepPin = D4; // STEP pin on ESP8266
 
 unsigned int ocrValue = 0;
 
 int motSpeed = initialSpeed; // Define motor parameters
 int motDir = initialMot;
 
+volatile bool stepState = false;
+unsigned long stepInterval = 8000; // مقدار اولیه برای تناسب با سرعت
+
+void stepMotorInterrupt()
+{
+  digitalWrite(motStepPin, stepState);
+  stepState = !stepState;
+}
 //-------------------Oled-------------------
 
 #define OLED_RESET -1       // Reset pin # (or -1 if sharing Arduino reset pin)
@@ -64,9 +75,9 @@ PID pid(&temp, &output, &setpoint, Kp, Ki, Kd, DIRECT);
 
 //-------------------Rotary-------------------
 
-#define Clock A3 // Clock pin connected to D9  //FIXME
-#define Data A2  // Data pin connected to D8
-#define Push A1  // Push button pin connected to D10
+#define Clock D7 // Clock pin connected to D5
+#define Data D6  // Data pin connected to D6
+#define Push D5  // Push button pin connected to D7
 
 long position = 0;
 bool flag_change = false;
@@ -83,73 +94,57 @@ int Data_input = initialTemp;
 bool Start_Stop = true;
 bool Motor_status = true;
 
-//-------------------
-#define minTemp 190
-#define maxTemp 250
-#define minSpeed 1
-#define maxSpeed 40
-#define minMot 0
-#define maxMot 2
-
-int encCurrent = initialTemp;
-int oldencCurrent = initialTemp;
-int dataInputNo = 0; // Data input tracking, 0 - temp, 1 - speed, 2 - motor
-
-unsigned long TimePuch = 0;
+//-------------------Bottun-------------------
 
 const unsigned long debounceTime = 10; // Debounce delay time
 unsigned long buttonPressTime;         // Time button has been pressed for debounce
-boolean pressed = false;
 
-int loopTime = 500; // Define time for each loop cycle
-unsigned long currentTime = 0;
-
-THERMISTOR thermistor(temperaturePin, // Analog pin
-                      50,             // Nominal resistance at 25 ºC
-                      3100,           // thermistor's beta coefficient
-                      54);            // Value of the series resistor
-                                      // Connect thermistor on A2
-
-int motMaxDelay = 100;
+Ticker stepTicker; // تایمر نرم‌افزاری برای تولید پالس‌های STEP
 
 void updateDataDisplay();
 void HotEnd();
 void roteryread();
 void Input();
+void stepMotor();
 
 void setup()
 {
   Serial.begin(115200); // Initialize serial communication
+
   // SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
   if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS))
   {
-    // Serial.println("SSD1306 allocation failed");
+    Serial.println(F("SSD1306 allocation failed"));
     for (;;)
       ; // Don't proceed, loop forever
   }
 
   display.clearDisplay(); // Clear the buffer
 
-  pinMode(pwmPin, OUTPUT); // Configure PWM pin
+  // pinMode(pwmPin, OUTPUT); // Configure PWM pin
 
   pid.SetMode(AUTOMATIC); // Set the PID parameters
-  pid.SetOutputLimits(0, 255);
+  pid.SetOutputLimits(0, 250);
 
-  temp = thermistor.read(); // Read and set the initial input value
+  temp = thermistor.read() / 10.0; // Read and set the initial input value
 
-  // pinMode(Clock,INPUT_PULLUP);
-  // pinMode(Data,INPUT_PULLUP);
   pinMode(Push, INPUT_PULLUP);
+
+  pinMode(motDirPin, OUTPUT);
+  pinMode(motStepPin, OUTPUT);
+
+  timer1_disable();
+  timer1_attachInterrupt(stepMotorInterrupt);
+  timer1_isr_init();
 }
 
-ISR(TIMER1_COMPA_vect)
+void stepMotor()
 {
   digitalWrite(motStepPin, !digitalRead(motStepPin)); // تولید پالس
 }
 
 void loop()
 {
-
   // Update the OLED display
   updateDataDisplay();
 
@@ -158,6 +153,7 @@ void loop()
 
   // program input state
   Input();
+  pid.Compute();
 
   if (!Start_Stop)
   {
@@ -166,142 +162,22 @@ void loop()
     if (Motor_status)
     {
       Motor_status = false;
-      noInterrupts();
-      TCCR1A = 0;
-      TCCR1B = 0;
-      TCNT1 = 0;
-      TCNT1 = 0;               // ریست تایمر
-      OCR1A = ocrValue;        // تنظیم مقدار OCR1A
-      TCCR1B |= (1 << WGM12);  // حالت CTC (Clear Timer on Compare Match)
-      TCCR1B |= (1 << CS10);   // بدون پیش‌تقسیم‌کننده (Prescaler = 1)
-      TIMSK1 |= (1 << OCIE1A); // فعال کردن اینتراپت Compare Match
-      interrupts();
+      unsigned long stepFrequency = map(motSpeed, 0, 100, 8000, 200000); // تبدیل سرعت به فرکانس
+      stepInterval = 80000000 / stepFrequency;                           // محاسبه مقدار تایمر
+      timer1_enable(TIM_DIV16, TIM_EDGE, TIM_LOOP);
+      timer1_write(stepInterval); // مقدار اولیه تایمر
     }
   }
-
-  // // Check for input on the pushbutton
-  // while (millis() < currentTime + loopTime)
-  // {
-  //   encCurrent = (myEnc.read() / 4);
-  //   byte buttonState = digitalRead(Push);
-  //   if (buttonState != oldButtonState)
-  //   {
-  //     // Serial.println("Button change");
-  //     if (millis() - buttonPressTime >= debounceTime) // Debounce button
-  //     {
-  //       buttonPressTime = millis();   // Time when button was pushed
-  //       oldButtonState = buttonState; // Remember button state for next time
-  //       if (buttonState == LOW)
-  //       {
-  //         pressed = true;
-  //         // Serial.println("Button Pressed");
-  //       }
-  //       else
-  //       {
-  //         if (pressed == true) // Confirm the input once the button is released again
-  //         {
-  //           pressed = false;
-  //           // Serial.println("Button Released");
-  //           if (dataInputNo == 0) // Set which parameter is being edited and define limits
-  //           {
-  //             dataInputNo = 1;
-  //             encCurrent = motSpeed;
-  //             encLowLim = minSpeed;
-  //             encHighLim = maxSpeed;
-  //           }
-  //           else if (dataInputNo == 1)
-  //           {
-  //             dataInputNo = 2;
-  //             encCurrent = motDir;
-  //             encLowLim = minMot;
-  //             encHighLim = maxMot;
-  //           }
-  //           else
-  //           {
-  //             dataInputNo = 0;
-  //             encCurrent = setpoint;
-  //             encLowLim = minTemp;
-  //             encHighLim = maxTemp;
-  //           }
-  //         }
-  //       }
-  //     }
-  //   }
-  //   // Set the parameter being edited equal to the current encoder position
-  //   if (dataInputNo == 0)
-  //   {
-  //     setpoint = encCurrent + initialTemp;
-  //   }
-  //   else if (dataInputNo == 1)
-  //   {
-  //     motSpeed = encCurrent + initialSpeed;
-  //     // motDelayTime = 100 * (1 + maxSpeed - motSpeed);
-  //     myStepper.setSpeed(motSpeed);
-  //   }
-  //   else
-  //   {
-  //     motDir = encCurrent;
-  //   }
-  //   // Set the motor direction
-  //   if (motDir == 0)
-  //   {
-  //     // pinMode(enablePin, OUTPUT);   // Enable motor
-  //     // digitalWrite(motDirPin, LOW); // Reverse motor direction
-  //     myStepper.moveTo(-1);
-  //     updateDataDisplay();
-  //   }
-  //   else if (motDir == 2)
-  //   {
-  //     // pinMode(enablePin, OUTPUT);    // Enable motor
-  //     // digitalWrite(motDirPin, HIGH); // Forward motor direction
-  //     myStepper.moveTo(1);
-  //     updateDataDisplay();
-  //   }
-  //   else
-  //   {
-  //     // pinMode(enablePin, INPUT); // Disable motor
-  //     myStepper.disableOutputs();
-  //     updateDataDisplay();
-  //   }
-  //   // Pulse the stepper motor if forward or reverse is selected
-  //   if (motDir != 1)
-  //   {
-  //     while (true)
-  //     {
-  //       encCurrent = (myEnc.read());
-  //       if (encCurrent >= 2)
-  //       {
-  //         encCurrent = 2;
-  //       }
-  //       else if (encCurrent <= 0)
-  //       {
-  //         encCurrent = 0;
-  //       }
-  //       if (oldencCurrent != encCurrent)
-  //       {
-  //         oldencCurrent = encCurrent;
-  //         myEnc.write(encCurrent);
-  //       }
-  //       byte buttonState = digitalRead(Push);
-  //       if (buttonState != oldButtonState && millis() - buttonPressTime >= debounceTime)
-  //       {
-  //         buttonPressTime = millis();
-  //         oldButtonState = buttonState;
-  //         encCurrent = 0;
-  //         myEnc.write(encCurrent);
-  //       }
-  //       motDir = encCurrent;
-  //       runMotor();
-  //       updateDataDisplay();
-  //     }
-  //   }
-  // }
+  else
+  {
+    timer1_disable(); // توقف تایمر در حالت غیرفعال
+  }
 }
 
 void HotEnd()
 {
   // Read the temperature
-  temp = thermistor.read(); // read temperature
+  temp = thermistor.read() / 10.0; // read temperature
 
   // Compute the PID output
   pid.Compute();
@@ -313,9 +189,7 @@ void HotEnd()
 // Update the OLED display contents
 void updateDataDisplay()
 {
-
   // write constants :
-
   display.clearDisplay();              // Clear display
   display.setTextSize(1);              // Set the text size
   display.setTextColor(SSD1306_WHITE); // Draw white text
@@ -337,34 +211,26 @@ void updateDataDisplay()
   display.print(motSpeed);
 
   // write deffernces :
-
   switch (state_program)
   {
   case first_Menu:
-
     display.setCursor(87, 30);
-    display.print(F(">"));
-    display.setCursor(97, 50);
     break;
 
   case secend_Menu:
-
     display.setCursor(87, 40);
-    display.print(F(">"));
-    display.setCursor(97, 50);
     break;
 
   case third_Menu:
-
     display.setCursor(87, 50);
-    display.print(F(">"));
-    display.setCursor(97, 50);
     break;
 
   default:
     break;
   }
 
+  display.print(F(">"));
+  display.setCursor(97, 50);
   switch (motDir)
   {
   case 0:
@@ -387,62 +253,50 @@ void updateDataDisplay()
 // Read Rotary Enc
 void roteryread()
 {
-
   // key
   byte buttonState = digitalRead(Push);
 
   if (buttonState != oldButtonState && millis() - buttonPressTime >= debounceTime)
   {
-
     if (buttonState == LOW && Start_Stop)
     {
-      Serial.print("Push");
-      state_program++;
-      if (state_program >= 3)
-      {
-        state_program = 0;
-      }
-      if (state_program < 0)
-      {
-        state_program = 2;
-      }
-      if (state_program == 0)
-      {
-        Data_input = setpoint;
-      }
-      if (state_program == 1)
-      {
-        Data_input = motSpeed;
-      }
-      if (state_program == 2)
-      {
-        Data_input = motDir;
-      }
+      buttonPressTime = millis();
     }
-    if (buttonState == HIGH)
+    if (buttonState == HIGH) // FIXME
     {
-      if (millis() - buttonPressTime >= 3000)
+      if (millis() - buttonPressTime >= 2000)
       {
-        if (!Start_Stop)
-        {
-          TCCR1B &= ~(1 << CS12); // turn off the clock altogether
-          TCCR1B &= ~(1 << CS11);
-          TCCR1B &= ~(1 << CS10);
-          TIMSK1 &= ~(1 << OCIE1A); 
-          Serial.print("sdfsdf");
-        }
-        else
-        {
-          Serial.print("hghg");
-          Motor_status = true;
-        }
-
+        Motor_status = true;
         Start_Stop = !Start_Stop;
-        Serial.print(Start_Stop);
+        Serial.println(Start_Stop);
+      }
+      else
+      {
+        Serial.print("Push");
+        state_program++;
+        if (state_program >= 3)
+        {
+          state_program = 0;
+        }
+        if (state_program < 0)
+        {
+          state_program = 2;
+        }
+        if (state_program == 0)
+        {
+          Data_input = setpoint;
+        }
+        if (state_program == 1)
+        {
+          Data_input = motSpeed;
+        }
+        if (state_program == 2)
+        {
+          Data_input = motDir;
+        }
       }
     }
 
-    buttonPressTime = millis();
     oldButtonState = buttonState;
   }
 
@@ -481,7 +335,6 @@ void Input()
     setpoint = Data_input;
     break;
   case 1:
-  {
     if (Data_input > 100)
     {
       Data_input = 100;
@@ -490,25 +343,8 @@ void Input()
     {
       Data_input = 0;
     }
-
-    unsigned long stepFrequency = map(Data_input, 0, 100, minFrequency, maxFrequency);
-
-    ocrValue = (16000000UL / (stepFrequency * 2)) - 1;
-
-    // اعمال محدودیت‌ها
-    if (ocrValue < minOCRValue)
-    {
-      ocrValue = minOCRValue;
-      Serial.println("Warning: OCR1A value too low. Capped at minimum value.");
-    }
-    else if (ocrValue > maxOCRValue)
-    {
-      ocrValue = maxOCRValue;
-      Serial.println("Warning: OCR1A value too high. Capped at maximum value.");
-    }
     motSpeed = Data_input;
     break;
-  }
   case 2:
     if (Data_input > 1)
     {
@@ -519,6 +355,8 @@ void Input()
       Data_input = -1;
     }
     motDir = Data_input;
+    digitalWrite(motDirPin, motDir == -1 ? LOW : HIGH);
+    break;
   default:
     break;
   }
